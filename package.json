@@ -1,0 +1,43 @@
+{
+  "name": "repzo-netsuite",
+  "version": "0.0.0",
+  "description": "",
+  "keywords": [],
+  "author": {
+    "name": "Amal Rasas",
+    "email": "amal.rasas@repzoapp.com"
+  },
+  "license": "ISC",
+  "contributors": [],
+  "main": "./lib/index.js",
+  "type": "module",
+  "bugs": {},
+  "directories": {},
+  "engines": {},
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:Repzo/repzo-netsuite.git"
+  },
+  "build": "tsc",
+  "dependencies": {
+    "@types/aws-lambda": "^8.10.142",
+    "@types/jsonwebtoken": "^9.0.6",
+    "axios": "^1.9.0",
+    "oauth-1.0a": "^2.2.6",
+    "pg": "^8.4.0",
+    "reflect-metadata": "^0.1.13",
+    "repzo": "^1.0.118"
+  },
+  "devDependencies": {
+    "@types/node": "^16.11.10",
+    "@types/uuid": "^10.0.0",
+    "prettier": "^3.5.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "lint": "npx prettier --write .",
+    "build": "tsc && npm run lint"
+  }
+}
