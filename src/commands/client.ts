@@ -77,9 +77,14 @@ export const addClients = async (
 
     const base_url = `${commandEvent?.app?.formData?.suiteTalkUrl}/services/rest/query/v1/suiteql`;
 
-    const query = {
-      q: `SELECT * from customer WHERE lastmodifieddate >= TO_DATE('${bench_time.slice(0, 10)}', 'YYYY-MM-DD')`,
-    };
+    const query =
+      bench_time === ""
+        ? {
+            q: `SELECT * from customer `,
+          }
+        : {
+            q: `SELECT * from customer WHERE lastmodifieddate >= TO_DATE('${bench_time.slice(0, 10)}', 'YYYY-MM-DD')`,
+          };
 
     const request_data = {
       url: `${base_url}?limit=1&offset=${offset}`,
@@ -195,7 +200,7 @@ export const addClients = async (
         if (!repzo_client.data.length) {
           // create client
           let client_body: RepzoClient = {
-            name: item?.companyname,
+            name: item?.companyname || item?.altname,
             email: item?.email,
             phone: item?.phone,
             client_code: item?.id,
@@ -268,7 +273,6 @@ export const addClients = async (
       )
       .setBody(result)
       .commit();
-
     return result;
   } catch (e) {
     console.error(e?.response?.data || e);
