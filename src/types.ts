@@ -8,18 +8,18 @@ export interface Command {
   description: string;
   name: string;
 }
-
+export interface FormData {
+  repzoApiKey: string;
+  suiteTalkUrl: string;
+  consumerKey: string;
+  consumerSecret: string;
+  tokenKey: string;
+  tokenSecret: string;
+  realm: string;
+}
 interface AppWithCustomFormData
   extends Service.App.Schema_with_populated_AvailableApp {
-  formData: {
-    repzoApiKey: string;
-    suiteTalkUrl: string;
-    consumerKey: string;
-    consumerSecret: string;
-    tokenKey: string;
-    tokenSecret: string;
-    realm: string;
-  };
+  formData: FormData;
 }
 
 export interface CommandEvent {
@@ -60,16 +60,24 @@ export interface SuiteTalkRESTResponse {
   totalResults: number;
 }
 
-export interface RepzoClient {
+export interface RepzoClientCreateBody {
   name: string;
   email?: string;
   cell_phone?: string;
   phone?: string;
-  client_code: string;
   financials?: { credit_limit?: number };
   comment?: string;
+  integration_meta: IntegrationMeta;
 }
-
+export interface RepzoClient {
+  integration_meta: IntegrationMeta;
+  _id: string;
+}
+interface IntegrationMeta {
+  id?: string;
+  netsuite_id?: string;
+  netsuite_last_sync?: string;
+}
 export interface NetSuiteClient {
   links: any[];
   alcoholrecipienttype: string;

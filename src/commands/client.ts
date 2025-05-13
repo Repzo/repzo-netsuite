@@ -3,6 +3,7 @@ import {
   FailedDocsReport,
   NetSuiteClient,
   RepzoClient,
+  RepzoClientCreateBody,
   Result,
   SuiteTalkRESTResponse,
 } from "../types";
@@ -32,7 +33,7 @@ export const addClients = async (
     let new_bench_time = new Date().toISOString();
     const bench_time_key = "bench_time_client";
     const bench_time = commandEvent.app.options_formData[bench_time_key] || "";
-
+    const company_namespace = commandEvent.nameSpace.join("_");
     let response: SuiteTalkRESTResponse,
       pagination_info: SuiteTalkRESTResponse,
       hasMore: boolean;
@@ -114,7 +115,6 @@ export const addClients = async (
         .commit();
 
       hasMore = pagination_info?.hasMore;
-      result.netsuite_total = pagination_info?.totalResults;
     } catch (e) {
       failed_docs_report.push({
         method: "fetchingData",
@@ -149,6 +149,20 @@ export const addClients = async (
       return result;
     }
 
+    result.netsuite_total = pagination_info?.totalResults;
+
+    let netsuite_customers: Pick<
+      NetSuiteClient,
+      | "id"
+      | "companyname"
+      | "altname"
+      | "phone"
+      | "email"
+      | "comments"
+      | "creditlimit"
+      | "lastmodifieddate"
+    >[] = [];
+
     while (hasMore) {
       const requestUrl = `${base_url}?limit=${limit}&offset=${offset}`;
       const request_data = {
@@ -181,77 +195,99 @@ export const addClients = async (
         break;
       }
 
-      for (let i = 0; i < response?.items?.length; i++) {
-        let item: NetSuiteClient = response?.items[i],
-          repzo_client: Service.Client.Find.Result;
-
-        try {
-          repzo_client = await repzo.client.find({
-            client_code: item.id,
-          });
-        } catch (e) {
-          failed_docs_report.push({
-            method: "fetchingData",
-            error_message: `Failed to retrieve client data from Repzo API for client_code: ${item.id}. Error: ${e.message}`,
-          });
-          console.error(e);
-          continue;
-        }
-        if (!repzo_client.data.length) {
-          // create client
-          let client_body: RepzoClient = {
-            name: item?.companyname || item?.altname,
-            email: item?.email,
-            phone: item?.phone,
-            client_code: item?.id,
-            financials: {
-              credit_limit: Number(item?.creditlimit),
-            },
-            comment: item?.comments,
+      netsuite_customers.push(
+        ...response.items.map((customer) => {
+          return {
+            id: customer.id,
+            companyname: customer.companyname,
+            altname: customer.altname,
+            phone: customer.phone,
+            email: customer.email,
+            comments: customer.comments,
+            creditlimit: customer.creditlimit,
+            lastmodifieddate: customer.lastmodifieddate,
           };
+        }),
+      );
 
-          try {
-            await repzo.client.create(client_body);
-            result.created++;
-          } catch (e) {
-            failed_docs_report.push({
-              method: "insert",
-              error_message: `Failed to create client in Repzo API for client_code: ${client_body.client_code}. Error: ${e.message}`,
-            });
-            console.error(e);
-            result.failed++;
-            continue;
-          }
-        } else {
-          //update client
-          let update_client_body: Partial<RepzoClient> = {
-            name: item?.companyname,
-            email: item?.email,
-            phone: item?.phone,
-            financials: {
-              credit_limit: Number(item?.creditlimit),
+      hasMore = response?.hasMore;
+      offset += limit;
+    }
+
+    let repzo_clients = await getRepzoClients(repzo, failed_docs_report);
+
+    repzo_clients = repzo_clients?.filter(
+      (repzo_client) => repzo_client?.integration_meta?.id !== undefined,
+    );
+
+    for (let i = 0; i < netsuite_customers.length; i++) {
+      let netsuite_customer = netsuite_customers[i];
+      let existent_repzo_client = repzo_clients.find(
+        (repzo_client) =>
+          repzo_client.integration_meta.id ===
+          `${company_namespace}_${netsuite_customer.id}`,
+      );
+      if (existent_repzo_client) {
+        // update client
+        if (
+          new Date(netsuite_customer.lastmodifieddate) >
+          new Date(existent_repzo_client?.integration_meta?.netsuite_last_sync)
+        ) {
+          let client_update_body: Partial<RepzoClientCreateBody> = {
+            name: netsuite_customer?.companyname || netsuite_customer?.altname,
+            email: netsuite_customer?.email,
+            phone: netsuite_customer?.phone,
+            comment: netsuite_customer?.comments,
+            integration_meta: {
+              netsuite_last_sync: new Date().toISOString(),
             },
-            comment: item?.comments,
+            financials: {
+              credit_limit: Number(netsuite_customer?.creditlimit),
+            },
           };
           try {
             await repzo.client.update(
-              repzo_client?.data[0]._id,
-              update_client_body,
+              existent_repzo_client._id,
+              client_update_body,
             );
             result.updated++;
           } catch (e) {
-            failed_docs_report.push({
-              method: "update",
-              error_message: `Failed to update client in Repzo API for client_code: ${repzo_client?.data[0]?.client_code}. Error: ${e.message}`,
-            });
-            result.failed++;
             console.error(e);
-            continue;
+            result.failed++;
+            failed_docs_report.push({
+              method: "insert",
+              error_message: `Failed to update client in Repzo API for NetSuite customer with ID: ${netsuite_customer.id}. Error: ${e.message}`,
+            });
           }
         }
+      } else {
+        // create client
+        let create_body: RepzoClientCreateBody = {
+          name: netsuite_customer?.companyname || netsuite_customer?.altname,
+          email: netsuite_customer?.email,
+          phone: netsuite_customer?.phone,
+          comment: netsuite_customer?.comments,
+          integration_meta: {
+            id: `${company_namespace}_${netsuite_customer.id}`,
+            netsuite_id: netsuite_customer.id,
+            netsuite_last_sync: new Date().toISOString(),
+          },
+          financials: {
+            credit_limit: Number(netsuite_customer?.creditlimit),
+          },
+        };
+        try {
+          await repzo.client.create(create_body);
+          result.created++;
+        } catch (e) {
+          console.error(e);
+          result.failed++;
+          failed_docs_report.push({
+            method: "insert",
+            error_message: `Failed to create client in Repzo API for NetSuite customer with ID: ${netsuite_customer.id}. Error: ${e.message}`,
+          });
+        }
       }
-      hasMore = response?.hasMore;
-      offset += limit;
     }
     result.migrated_docs = result.updated + result.created;
 
@@ -277,6 +313,66 @@ export const addClients = async (
   } catch (e) {
     console.error(e?.response?.data || e);
     await commandLog.setStatus("fail", e).commit();
+    throw e;
+  }
+};
+
+const getRepzoClients = async (
+  repzo: Repzo,
+  failed_docs_report: FailedDocsReport,
+): Promise<RepzoClient[]> => {
+  try {
+    let repzo_clients: RepzoClient[] = [],
+      per_page = 300,
+      pagination_info: Service.Client.Find.Result,
+      clients: Service.Client.Find.Result;
+
+    try {
+      pagination_info = await repzo.client.find({
+        per_page: 1,
+        page: 1,
+      });
+    } catch (e) {
+      failed_docs_report.push({
+        method: "fetchingData",
+        error_message: `Failed to retrieve client data from Repzo API on page 1. Error: ${e.message}`,
+      });
+      console.error(e);
+      throw e;
+    }
+
+    const num_pages = Math.ceil(pagination_info.total_result / per_page);
+
+    for (let i = 1; i <= num_pages; i++) {
+      try {
+        clients = await repzo.client.find({
+          per_page,
+          page: i,
+        });
+        repzo_clients.push(
+          ...clients?.data?.map((client) => {
+            return {
+              _id: client._id,
+              integration_meta: {
+                id: client.integration_meta.id,
+                netsuite_id: client.integration_meta.netsuite_id,
+                netsuite_last_sync: client.integration_meta.netsuite_last_sync,
+              },
+            };
+          }),
+        );
+      } catch (e) {
+        failed_docs_report.push({
+          method: "fetchingData",
+          error_message: `Failed to retrieve client data from Repzo API on page ${i}. Error: ${e.message}. Proceeding to the next page.`,
+        });
+        console.error(e);
+        continue;
+      }
+    }
+    return repzo_clients;
+  } catch (e) {
+    console.error(e);
     throw e;
   }
 };
