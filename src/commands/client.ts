@@ -161,6 +161,7 @@ export const addClients = async (
       | "comments"
       | "creditlimit"
       | "lastmodifieddate"
+      | "entityid"
     >[] = [];
 
     while (hasMore) {
@@ -206,6 +207,7 @@ export const addClients = async (
             comments: customer.comments,
             creditlimit: customer.creditlimit,
             lastmodifieddate: customer.lastmodifieddate,
+            entityid: customer.entityid,
           };
         }),
       );
@@ -267,9 +269,10 @@ export const addClients = async (
           email: netsuite_customer?.email,
           phone: netsuite_customer?.phone,
           comment: netsuite_customer?.comments,
+          client_code: `${netsuite_customer.id}-${netsuite_customer?.entityid}`,
           integration_meta: {
-            id: `${company_namespace}_${netsuite_customer.id}`,
-            netsuite_id: netsuite_customer.id,
+            id: `${company_namespace}_${netsuite_customer?.id}`,
+            netsuite_id: netsuite_customer?.id,
             netsuite_last_sync: new Date().toISOString(),
           },
           financials: {
@@ -309,6 +312,7 @@ export const addClients = async (
       )
       .setBody(result)
       .commit();
+
     return result;
   } catch (e) {
     console.error(e?.response?.data || e);

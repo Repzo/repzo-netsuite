@@ -63,6 +63,7 @@ export interface RepzoClientCreateBody {
     credit_limit?: number;
   };
   comment?: string;
+  client_code: string;
   integration_meta: IntegrationMeta;
 }
 export interface RepzoClient {
