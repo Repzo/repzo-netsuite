@@ -14,7 +14,7 @@ import axios from "axios";
 import OAuth from "oauth-1.0a";
 import crypto from "crypto";
 
-const limit = 300;
+const limit = 1000;
 let offset = 0;
 
 export const addClients = async (
@@ -145,11 +145,8 @@ export const addClients = async (
         )
         .setBody(result)
         .commit();
-
       return result;
     }
-
-    result.netsuite_total = pagination_info?.totalResults;
 
     let netsuite_customers: Pick<
       NetSuiteClient,
@@ -215,13 +212,12 @@ export const addClients = async (
       hasMore = response?.hasMore;
       offset += limit;
     }
-
+    result.netsuite_total = response.totalResults;
     let repzo_clients = await getRepzoClients(repzo, failed_docs_report);
 
     repzo_clients = repzo_clients?.filter(
       (repzo_client) => repzo_client?.integration_meta?.id !== undefined,
     );
-
     for (let i = 0; i < netsuite_customers.length; i++) {
       let netsuite_customer = netsuite_customers[i];
       let existent_repzo_client = repzo_clients.find(
@@ -241,6 +237,8 @@ export const addClients = async (
             phone: netsuite_customer?.phone,
             comment: netsuite_customer?.comments,
             integration_meta: {
+              id: `${company_namespace}_${netsuite_customer?.id}`,
+              netsuite_id: netsuite_customer?.id,
               netsuite_last_sync: new Date().toISOString(),
             },
             financials: {
@@ -269,7 +267,7 @@ export const addClients = async (
           email: netsuite_customer?.email,
           phone: netsuite_customer?.phone,
           comment: netsuite_customer?.comments,
-          client_code: `${netsuite_customer.id}-${netsuite_customer?.entityid}`,
+          client_code: `${netsuite_customer?.id}-${netsuite_customer?.entityid}`,
           integration_meta: {
             id: `${company_namespace}_${netsuite_customer?.id}`,
             netsuite_id: netsuite_customer?.id,
@@ -312,7 +310,6 @@ export const addClients = async (
       )
       .setBody(result)
       .commit();
-
     return result;
   } catch (e) {
     console.error(e?.response?.data || e);
@@ -327,7 +324,7 @@ const getRepzoClients = async (
 ): Promise<RepzoClient[]> => {
   try {
     let repzo_clients: RepzoClient[] = [],
-      per_page = 300,
+      per_page = 1000,
       pagination_info: Service.Client.Find.Result,
       clients: Service.Client.Find.Result;
 
